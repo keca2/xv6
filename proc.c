@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "uproc.h"
 
 static char *states[] = {
   [UNUSED]    "unused",
@@ -148,7 +149,12 @@ allocproc(void)
   p->context->eip = (uint)forkret;
 #ifdef CS333_P1
   p->start_ticks = ticks;
-#endif // CS333
+#endif // CS333_P1
+
+#ifdef CS333_P2
+  p->cpu_ticks_total = 0;
+  p->cpu_ticks_in = 0;
+#endif // CS333_P2
 
   return p;
 }
@@ -246,6 +252,11 @@ fork(void)
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+
+#ifdef CS333_P2
+  np->uid = curproc->uid;
+  np->gid = curproc->gid;
+#endif // CS333_P2
 
   pid = np->pid;
 
@@ -390,6 +401,9 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
+#ifdef CS333_P2
+      p->cpu_ticks_in = ticks;
+#endif
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -430,6 +444,10 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
+#ifdef CS333_P2
+  p->cpu_ticks_total += (ticks - p->cpu_ticks_in);
+#endif
+
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }
@@ -557,7 +575,30 @@ kill(int pid)
 void
 procdumpP2P3P4(struct proc *p, char *state_string)
 {
-  cprintf("TODO for Project 2, delete this line and implement procdumpP2P3P4() in proc.c to print a row\n");
+  int elapse = (ticks - p->start_ticks);
+
+  int MAXNAME = 12;
+  int len = strlen(p->name);
+  if(len > MAXNAME)
+  {
+    p->name[MAXNAME] = '\0';
+    len = MAXNAME;
+  }
+
+  cprintf("%d\t%s", p->pid, p->name);
+  for(int i = len; i <=MAXNAME; i++)
+    cprintf(" ");
+
+  cprintf("%d\t\t%d\t", p->uid, p->gid);
+
+  int ppid;
+  if(p->parent)
+    ppid = p->parent->pid;
+  else
+    ppid = p->pid;
+
+  cprintf("%d\t%d.%d\t%d.%d\t%s\t%d\t", ppid, elapse/1000, elapse%1000, p->cpu_ticks_total/1000, p->cpu_ticks_total%1000, state_string, p->sz);
+
   return;
 }
 #elif defined(CS333_P1)
@@ -565,7 +606,22 @@ void
 procdumpP1(struct proc *p, char *state_string)
 {
   int elapse = (ticks - p->start_ticks);
-  cprintf("%d\t%s\t     %d.%d\t%s\t%d\t", p->pid, p->name, elapse/1000, elapse%1000, state_string, p->sz);
+
+  // From Mark in Slack 01/08/21
+  int MAXNAME = 12;
+  int len = strlen(p->name);
+  if(len > MAXNAME)
+  {
+    p->name[MAXNAME] = '\0';
+    len = MAXNAME;
+  }
+  cprintf("%d\t%s", p->pid, p->name);
+  for(int i = len; i <=MAXNAME; i++)
+    cprintf(" ");
+  
+  // 
+
+  cprintf("%d.%d\t%s\t%d\t", elapse/1000, elapse%1000, state_string, p->sz);
   return;
 }
 #endif
@@ -619,6 +675,42 @@ procdump(void)
   cprintf("$ ");  // simulate shell prompt
 #endif // CS333_P1
 }
+
+#ifdef CS333_P2
+int
+getprocs(uint max, struct uproc* table)
+{
+  int index = 0;
+  struct proc *p;
+
+  acquire(&ptable.lock); // Acquire the lock
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC] && index < max; p++)
+  {
+    if(p->state == EMBRYO || p->state == UNUSED) // If the current process isn't active, continue
+      continue;
+
+    table[index].pid = p->pid;
+    safestrcpy(table[index].name, p->name, strlen(p->name) + 1);
+    table[index].uid = p->uid;
+    table[index].gid = p->gid;
+    if(!p->parent)
+      table[index].ppid = 1;
+    else
+      table[index].ppid = p->parent->pid;
+
+    table[index].elapsed_ticks = ticks - p->start_ticks;
+    table[index].CPU_total_ticks = p->cpu_ticks_total;
+    safestrcpy(table[index].state, states[p->state], strlen(states[p->state]) + 1);
+    table[index].size = p->sz;
+
+    ++index;
+  }
+
+  release(&ptable.lock);
+  return index; // Return the # of active processes
+}
+#endif // CS333_P2
 
 #if defined(CS333_P3)
 // list management helper functions
@@ -919,4 +1011,5 @@ checkProcs(const char *file, const char *func, int line)
   }
 }
 #endif // DEBUG
+
 

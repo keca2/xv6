@@ -43,6 +43,19 @@ int atoi(const char*);
 int atoo(const char*);
 int strncmp(const char*, const char*, uint);
 #endif // PDX_XV6
+
 #ifdef CS333_P1
 int date(struct rtcdate*);
 #endif // CS333_P1
+
+#ifdef CS333_P2
+uint getuid(void);     // User ID of the current process
+uint getgid(void);     // Group ID of the current process
+uint getppid(void);     // Process ID of the parent process
+int setuid(uint);      // set User ID of current process
+int setgid(uint);      // set Group ID of the current process
+int getprocs(uint max, struct uproc* table); // ps command  
+#endif // CS333_P2
+ 
+
+
