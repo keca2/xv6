@@ -30,6 +30,9 @@ struct ptrs {
 static struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+#ifdef CS333_P3
+  struct ptrs list[statecount];
+#endif
 } ptable;
 
 // list management function prototypes
@@ -444,8 +447,9 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
+
 #ifdef CS333_P2
-  p->cpu_ticks_total += (ticks - p->cpu_ticks_in);
+  p->cpu_ticks_total += (ticks - p->cpu_ticks_in); // total ticks before cntxt swtch
 #endif
 
   swtch(&p->context, mycpu()->scheduler);
@@ -597,7 +601,13 @@ procdumpP2P3P4(struct proc *p, char *state_string)
   else
     ppid = p->pid;
 
-  cprintf("%d\t%d.%d\t%d.%d\t%s\t%d\t", ppid, elapse/1000, elapse%1000, p->cpu_ticks_total/1000, p->cpu_ticks_total%1000, state_string, p->sz);
+  int cpu_time = p->cpu_ticks_total;
+  int sec = cpu_time/1000;
+  int tens = (cpu_time %= 1000) / 100;
+  int hunds = (cpu_time %= 100) / 10;
+  int thous = cpu_time %= 10;
+
+  cprintf("%d\t%d.%d\t%d.%d%d%d\t%s\t%d\t", ppid, elapse/1000, elapse%1000, sec, tens, hunds, thous, state_string, p->sz);
 
   return;
 }
