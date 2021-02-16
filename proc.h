@@ -49,11 +49,19 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+#ifdef CS333_P1
   uint start_ticks;            // Allows process to know when it was created
+#endif
+#ifdef CS333_P2
   uint uid;                    // User ID
   uint gid;                    // Group ID
   uint cpu_ticks_total;        // Total elapased ticks in CPU
   uint cpu_ticks_in;           // Ticks when scheduled
+#endif // CS333_P2
+#ifdef CS333_P3
+  struct proc *next;           // Next process in each list
+#endif // CS333_P3
+
 };
 
 // Process memory is laid out contiguously, low addresses first:
